@@ -26,7 +26,7 @@ def save_memory(memory):
 def chat():
     try:
         data = request.json
-        app.logger.info(f"收到请求: {json.dumps(data, ensure_ascii=False)}")
+        print(f"收到请求: {json.dumps(data, ensure_ascii=False)}")
 
         # 提取用户消息
         user_text = ""
@@ -36,11 +36,11 @@ def chat():
                 user_text = last_msg.get("content", "")
 
         if not user_text:
+            print("未提取到用户内容")
             return jsonify({"error": "请输入内容"}), 400
 
         # 加载完整历史
         history = load_memory()
-        # 构建消息列表：历史 + 当前用户消息
         messages = history + [{"role": "user", "content": user_text}]
 
         # 调用 AIHubMix
@@ -52,13 +52,13 @@ def chat():
 
         reply = response.choices[0].message.content
 
-        # 保存记忆（追加）
+        # 保存记忆
         history.append({"role": "user", "content": user_text})
         history.append({"role": "assistant", "content": reply})
         save_memory(history)
 
-        # 构建标准 OpenAI 格式响应（包含所有必要字段，确保 ChatBox 能识别）
-        return jsonify({
+        # 构造标准 OpenAI 格式
+        resp = {
             "id": f"chatcmpl-{uuid.uuid4().hex[:8]}",
             "object": "chat.completion",
             "created": int(time.time()),
@@ -78,10 +78,12 @@ def chat():
                 "completion_tokens": 0,
                 "total_tokens": 0
             }
-        })
+        }
+        print(f"返回响应: {json.dumps(resp, ensure_ascii=False)}")
+        return jsonify(resp)
 
     except Exception as e:
-        app.logger.error(f"错误: {str(e)}")
+        print(f"错误: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
