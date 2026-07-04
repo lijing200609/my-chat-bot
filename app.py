@@ -1,15 +1,13 @@
 from flask import Flask, request, jsonify
-from openai import OpenAI
+import openai
 import os
 import json
 
 app = Flask(__name__)
 
-# 从环境变量读取 API Key
-client = OpenAI(
-    api_key=os.getenv("AIHUBMIX_API_KEY"),
-    base_url="https://aihubmix.com/v1"
-)
+# 设置 API 密钥和 Base URL（用环境变量）
+openai.api_key = os.getenv("AIHUBMIX_API_KEY")
+openai.api_base = "https://aihubmix.com/v1"   # 注意是 /v1 还是 /v1 取决于你的中转
 
 # 加载记忆
 def load_memory():
@@ -33,32 +31,28 @@ def chat():
         data = request.json
         user_text = data.get("text", "")
         user_image = data.get("image_base64", None)
-        
-        # 构建消息内容
-        content = [{"type": "text", "text": user_text}]
-        if user_image:
-            content.append({
-                "type": "image_url",
-                "image_url": {"url": f"data:image/jpeg;base64,{user_image}"}
-            })
-        
-        # 调用 AIHubMix
-        response = client.chat.completions.create(
+
+        # 构建消息内容（旧版 API 不支持数组形式的 content，所以暂时不支持图片，
+        # 如果你需要图片，稍后我们可以再调整，但先让文字跑起来）
+        messages = [{"role": "user", "content": user_text}]
+
+        # 调用 AIHubMix（使用旧版 completion 接口）
+        response = openai.ChatCompletion.create(
             model="claude-sonnet-4.6",
-            messages=[{"role": "user", "content": content}],
+            messages=messages,
             max_tokens=4096
         )
-        
+
         reply = response.choices[0].message.content
-        
+
         # 保存记忆
         memory = load_memory()
         memory.append({"role": "user", "content": user_text})
         memory.append({"role": "assistant", "content": reply})
         save_memory(memory)
-        
+
         return jsonify({"response": reply, "status": "success"})
-    
+
     except Exception as e:
         return jsonify({"response": f"错误：{str(e)}", "status": "error"}), 500
 
