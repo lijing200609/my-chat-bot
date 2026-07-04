@@ -42,10 +42,8 @@ def chat():
             for msg in reversed(data["messages"]):
                 if msg.get("role") == "user":
                     content = msg.get("content")
-                    # 如果 content 是字符串，直接使用
                     if isinstance(content, str):
                         user_text = content
-                    # 如果 content 是数组，提取 text
                     elif isinstance(content, list):
                         for part in content:
                             if part.get("type") == "text":
@@ -53,7 +51,6 @@ def chat():
                                 break
                     break
         
-        # 如果 messages 提取失败，尝试其他字段
         if not user_text:
             user_text = (
                 data.get("text") or 
@@ -68,7 +65,6 @@ def chat():
 
         user_image = data.get("image_base64", None)
 
-        # 如果文字为空但有图片，自动补一个默认提示
         if not user_text and user_image:
             user_text = "请描述这张图片"
 
@@ -76,7 +72,6 @@ def chat():
             app.logger.warning("未提取到用户文字内容")
             return jsonify({"response": "请提供文字内容或图片", "status": "error"}), 400
 
-        # 🔧 关键修改：强制 content 为数组格式
         content_parts = [{"type": "text", "text": user_text}]
         if user_image:
             content_parts.append({
@@ -86,7 +81,6 @@ def chat():
 
         messages = [{"role": "user", "content": content_parts}]
 
-        # 调用 AIHubMix
         response = client.chat.completions.create(
             model="claude-sonnet-4-6",
             messages=messages,
@@ -95,13 +89,21 @@ def chat():
 
         reply = response.choices[0].message.content
 
-        # 保存记忆
         memory = load_memory()
         memory.append({"role": "user", "content": user_text})
         memory.append({"role": "assistant", "content": reply})
         save_memory(memory)
 
-        return jsonify({"response": reply, "status": "success"})
+        # ✅ 关键修改：返回标准 OpenAI 格式
+        return jsonify({
+            "choices": [
+                {
+                    "message": {
+                        "content": reply
+                    }
+                }
+            ]
+        })
 
     except Exception as e:
         app.logger.error(f"发生错误: {str(e)}")
