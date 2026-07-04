@@ -42,7 +42,7 @@ def chat():
 
         # 调用 AIHubMix（新版写法，支持多模态）
         response = client.chat.completions.create(
-            model="claude-sonnet-4.6",
+            model="claude-sonnet-4-6",
             messages=[{"role": "user", "content": content}],
             max_tokens=4096
         )
