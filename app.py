@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response, stream_with_context
 from openai import OpenAI
 import os
 import json
@@ -36,51 +36,73 @@ def chat():
                 user_text = last_msg.get("content", "")
 
         if not user_text:
-            print("未提取到用户内容")
             return jsonify({"error": "请输入内容"}), 400
 
-        # 加载完整历史
+        # 加载历史
         history = load_memory()
         messages = history + [{"role": "user", "content": user_text}]
 
-        # 调用 AIHubMix
-        response = client.chat.completions.create(
-            model="claude-sonnet-4-6",
-            messages=messages,
-            max_tokens=4096
-        )
+        # 判断是否流式
+        is_stream = data.get("stream", False)
 
-        reply = response.choices[0].message.content
+        if is_stream:
+            # 流式响应
+            def generate():
+                # 调用 AIHubMix 流式接口
+                stream_response = client.chat.completions.create(
+                    model="claude-sonnet-4-6",
+                    messages=messages,
+                    max_tokens=4096,
+                    stream=True
+                )
+                # 收集完整回复用于保存记忆
+                full_reply = ""
+                for chunk in stream_response:
+                    if chunk.choices and chunk.choices[0].delta.content:
+                        content = chunk.choices[0].delta.content
+                        full_reply += content
+                        yield f"data: {json.dumps({'choices': [{'delta': {'content': content}}]})}\n\n"
+                yield "data: [DONE]\n\n"
 
-        # 保存记忆
-        history.append({"role": "user", "content": user_text})
-        history.append({"role": "assistant", "content": reply})
-        save_memory(history)
+                # 保存记忆
+                history.append({"role": "user", "content": user_text})
+                history.append({"role": "assistant", "content": full_reply})
+                save_memory(history)
 
-        # 构造标准 OpenAI 格式
-        resp = {
-            "id": f"chatcmpl-{uuid.uuid4().hex[:8]}",
-            "object": "chat.completion",
-            "created": int(time.time()),
-            "model": "claude-sonnet-4-6",
-            "choices": [
-                {
-                    "index": 0,
-                    "message": {
-                        "role": "assistant",
-                        "content": reply
-                    },
-                    "finish_reason": "stop"
-                }
-            ],
-            "usage": {
-                "prompt_tokens": 0,
-                "completion_tokens": 0,
-                "total_tokens": 0
+            return Response(stream_with_context(generate()), mimetype="text/event-stream")
+
+        else:
+            # 非流式响应
+            response = client.chat.completions.create(
+                model="claude-sonnet-4-6",
+                messages=messages,
+                max_tokens=4096
+            )
+            reply = response.choices[0].message.content
+
+            # 保存记忆
+            history.append({"role": "user", "content": user_text})
+            history.append({"role": "assistant", "content": reply})
+            save_memory(history)
+
+            resp = {
+                "id": f"chatcmpl-{uuid.uuid4().hex[:8]}",
+                "object": "chat.completion",
+                "created": int(time.time()),
+                "model": "claude-sonnet-4-6",
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {
+                            "role": "assistant",
+                            "content": reply
+                        },
+                        "finish_reason": "stop"
+                    }
+                ]
             }
-        }
-        print(f"返回响应: {json.dumps(resp, ensure_ascii=False)}")
-        return jsonify(resp)
+            print(f"返回响应: {json.dumps(resp, ensure_ascii=False)}")
+            return jsonify(resp)
 
     except Exception as e:
         print(f"错误: {str(e)}")
