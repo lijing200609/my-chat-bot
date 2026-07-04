@@ -29,12 +29,18 @@ def home():
 def chat():
     try:
         data = request.json
-        user_text = data.get("text", "")
+
+        # 🔧 关键修改：兼容多种字段名
+        user_text = data.get("text") or data.get("content") or data.get("message") or data.get("prompt") or ""
         user_image = data.get("image_base64", None)
 
-        # 🔧 修复：如果文字为空但有图片，自动补一个默认提示
+        # 如果文字为空但有图片，自动补一个默认提示
         if not user_text and user_image:
             user_text = "请描述这张图片"
+
+        # 如果文字仍然为空，返回错误提示
+        if not user_text:
+            return jsonify({"response": "请提供文字内容或图片", "status": "error"}), 400
 
         # 构建消息内容（文字 + 图片）
         content = [{"type": "text", "text": user_text}]
@@ -44,7 +50,7 @@ def chat():
                 "image_url": {"url": f"data:image/jpeg;base64,{user_image}"}
             })
 
-        # 调用 AIHubMix（模型名称已修正为 claude-sonnet-4-6）
+        # 调用 AIHubMix
         response = client.chat.completions.create(
             model="claude-sonnet-4-6",
             messages=[{"role": "user", "content": content}],
