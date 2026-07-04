@@ -1,14 +1,14 @@
 # trigger redeploy
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response, stream_with_context
 from openai import OpenAI
 import os
 import json
 import logging
+import time
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
-# 初始化 OpenAI 客户端（连接 AIHubMix）
 client = OpenAI(
     api_key=os.getenv("AIHUBMIX_API_KEY"),
     base_url="https://aihubmix.com/v1"
@@ -34,10 +34,8 @@ def chat():
         data = request.json
         app.logger.info(f"收到完整请求: {json.dumps(data, ensure_ascii=False)}")
 
-        # 兼容多种字段名提取用户文字
+        # 提取用户文字
         user_text = None
-        
-        # 优先从 messages 里提取
         if isinstance(data.get("messages"), list):
             for msg in reversed(data["messages"]):
                 if msg.get("role") == "user":
@@ -50,16 +48,13 @@ def chat():
                                 user_text = part.get("text")
                                 break
                     break
-        
+
         if not user_text:
             user_text = (
                 data.get("text") or 
                 data.get("content") or 
                 data.get("message") or 
                 data.get("prompt") or 
-                data.get("input") or 
-                data.get("query") or 
-                data.get("question") or
                 ""
             )
 
@@ -70,8 +65,9 @@ def chat():
 
         if not user_text:
             app.logger.warning("未提取到用户文字内容")
-            return jsonify({"response": "请提供文字内容或图片", "status": "error"}), 400
+            return jsonify({"error": "请提供文字内容或图片"}), 400
 
+        # 构建请求
         content_parts = [{"type": "text", "text": user_text}]
         if user_image:
             content_parts.append({
@@ -81,20 +77,34 @@ def chat():
 
         messages = [{"role": "user", "content": content_parts}]
 
+        # 调用 AIHubMix
         response = client.chat.completions.create(
             model="claude-sonnet-4-6",
             messages=messages,
-            max_tokens=4096
+            max_tokens=4096,
+            stream=True  # 强制启用流式，适配 ChatBox
         )
 
+        # 如果是流式请求，使用流式响应
+        if data.get("stream", False):
+            def generate():
+                for chunk in response:
+                    if chunk.choices and chunk.choices[0].delta.content:
+                        # 构造 SSE 格式的响应
+                        yield f"data: {json.dumps({'choices': [{'delta': {'content': chunk.choices[0].delta.content}}]})}\n\n"
+                yield "data: [DONE]\n\n"
+
+            return Response(stream_with_context(generate()), mimetype="text/event-stream")
+
+        # 非流式响应（备用）
         reply = response.choices[0].message.content
 
+        # 保存记忆
         memory = load_memory()
         memory.append({"role": "user", "content": user_text})
         memory.append({"role": "assistant", "content": reply})
         save_memory(memory)
 
-        # ✅ 关键修改：返回标准 OpenAI 格式
         return jsonify({
             "choices": [
                 {
@@ -107,7 +117,7 @@ def chat():
 
     except Exception as e:
         app.logger.error(f"发生错误: {str(e)}")
-        return jsonify({"response": f"错误：{str(e)}", "status": "error"}), 500
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
