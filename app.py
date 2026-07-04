@@ -35,23 +35,36 @@ def chat():
         app.logger.info(f"收到完整请求: {json.dumps(data, ensure_ascii=False)}")
 
         # 兼容多种字段名提取用户文字
-        user_text = (
-            data.get("text") or 
-            data.get("content") or 
-            data.get("message") or 
-            data.get("prompt") or 
-            data.get("input") or 
-            data.get("query") or 
-            data.get("question") or
-            data.get("messages")
-        )
-
-        # 如果 messages 是数组，尝试提取最后一条用户消息
-        if not user_text and isinstance(data.get("messages"), list):
+        user_text = None
+        
+        # 优先从 messages 里提取
+        if isinstance(data.get("messages"), list):
             for msg in reversed(data["messages"]):
                 if msg.get("role") == "user":
-                    user_text = msg.get("content")
+                    content = msg.get("content")
+                    # 如果 content 是字符串，直接使用
+                    if isinstance(content, str):
+                        user_text = content
+                    # 如果 content 是数组，提取 text
+                    elif isinstance(content, list):
+                        for part in content:
+                            if part.get("type") == "text":
+                                user_text = part.get("text")
+                                break
                     break
+        
+        # 如果 messages 提取失败，尝试其他字段
+        if not user_text:
+            user_text = (
+                data.get("text") or 
+                data.get("content") or 
+                data.get("message") or 
+                data.get("prompt") or 
+                data.get("input") or 
+                data.get("query") or 
+                data.get("question") or
+                ""
+            )
 
         user_image = data.get("image_base64", None)
 
@@ -63,7 +76,7 @@ def chat():
             app.logger.warning("未提取到用户文字内容")
             return jsonify({"response": "请提供文字内容或图片", "status": "error"}), 400
 
-        # 🔧 关键修改：content 构建为数组格式（符合 AIHubMix 要求）
+        # 🔧 关键修改：强制 content 为数组格式
         content_parts = [{"type": "text", "text": user_text}]
         if user_image:
             content_parts.append({
@@ -73,9 +86,9 @@ def chat():
 
         messages = [{"role": "user", "content": content_parts}]
 
-        # 调用 AIHubMix（模型名称必须与本地能跑通的一致）
+        # 调用 AIHubMix
         response = client.chat.completions.create(
-            model="claude-sonnet-4-6",   # 与你的本地 chat.py 保持一致
+            model="claude-sonnet-4-6",
             messages=messages,
             max_tokens=4096
         )
