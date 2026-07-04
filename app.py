@@ -1,22 +1,22 @@
 from flask import Flask, request, jsonify
-import openai
+from openai import OpenAI
 import os
 import json
 
 app = Flask(__name__)
 
-# 设置 API 密钥和 Base URL（用环境变量）
-openai.api_key = os.getenv("AIHUBMIX_API_KEY")
-openai.api_base = "https://aihubmix.com/v1"   # 注意是 /v1 还是 /v1 取决于你的中转
+# 新版 OpenAI 客户端（支持图片多模态）
+client = OpenAI(
+    api_key=os.getenv("AIHUBMIX_API_KEY"),
+    base_url="https://aihubmix.com/v1"
+)
 
-# 加载记忆
 def load_memory():
     if os.path.exists("memory.json"):
         with open("memory.json", "r", encoding="utf-8") as f:
             return json.load(f)
     return []
 
-# 保存记忆
 def save_memory(memory):
     with open("memory.json", "w", encoding="utf-8") as f:
         json.dump(memory, f, ensure_ascii=False, indent=2)
@@ -30,16 +30,20 @@ def chat():
     try:
         data = request.json
         user_text = data.get("text", "")
-        user_image = data.get("image_base64", None)
+        user_image = data.get("image_base64", None)  # 微信/App 传过来的图片
 
-        # 构建消息内容（旧版 API 不支持数组形式的 content，所以暂时不支持图片，
-        # 如果你需要图片，稍后我们可以再调整，但先让文字跑起来）
-        messages = [{"role": "user", "content": user_text}]
+        # 构建消息内容（文字 + 图片）
+        content = [{"type": "text", "text": user_text}]
+        if user_image:
+            content.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:image/jpeg;base64,{user_image}"}
+            })
 
-        # 调用 AIHubMix（使用旧版 completion 接口）
-        response = openai.ChatCompletion.create(
+        # 调用 AIHubMix（新版写法，支持多模态）
+        response = client.chat.completions.create(
             model="claude-sonnet-4.6",
-            messages=messages,
+            messages=[{"role": "user", "content": content}],
             max_tokens=4096
         )
 
