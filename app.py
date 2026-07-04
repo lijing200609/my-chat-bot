@@ -5,11 +5,9 @@ import json
 import logging
 
 app = Flask(__name__)
-
-# 设置日志级别，打印请求详情
 logging.basicConfig(level=logging.INFO)
 
-# 新版 OpenAI 客户端（支持图片多模态）
+# 初始化 OpenAI 客户端（连接 AIHubMix）
 client = OpenAI(
     api_key=os.getenv("AIHUBMIX_API_KEY"),
     base_url="https://aihubmix.com/v1"
@@ -32,11 +30,10 @@ def home():
 @app.route("/chat", methods=["POST"])
 def chat():
     try:
-        # 🔍 打印完整请求体，看看 ChatBox 到底发了什么
         data = request.json
         app.logger.info(f"收到完整请求: {json.dumps(data, ensure_ascii=False)}")
 
-        # 兼容多种字段名
+        # 兼容多种字段名提取用户文字
         user_text = (
             data.get("text") or 
             data.get("content") or 
@@ -45,7 +42,7 @@ def chat():
             data.get("input") or 
             data.get("query") or 
             data.get("question") or
-            data.get("messages")  # ChatBox 可能用这个字段
+            data.get("messages")
         )
 
         # 如果 messages 是数组，尝试提取最后一条用户消息
@@ -61,23 +58,24 @@ def chat():
         if not user_text and user_image:
             user_text = "请描述这张图片"
 
-        # 如果文字仍然为空，返回错误提示
         if not user_text:
             app.logger.warning("未提取到用户文字内容")
             return jsonify({"response": "请提供文字内容或图片", "status": "error"}), 400
 
-        # 构建消息内容（文字 + 图片）
-        content = [{"type": "text", "text": user_text}]
+        # 🔧 关键修改：content 构建为数组格式（符合 AIHubMix 要求）
+        content_parts = [{"type": "text", "text": user_text}]
         if user_image:
-            content.append({
+            content_parts.append({
                 "type": "image_url",
                 "image_url": {"url": f"data:image/jpeg;base64,{user_image}"}
             })
 
-        # 调用 AIHubMix
+        messages = [{"role": "user", "content": content_parts}]
+
+        # 调用 AIHubMix（模型名称必须与本地能跑通的一致）
         response = client.chat.completions.create(
-            model="claude-sonnet-4-6",
-            messages=[{"role": "user", "content": content}],
+            model="claude-sonnet-4-6",   # 与你的本地 chat.py 保持一致
+            messages=messages,
             max_tokens=4096
         )
 
