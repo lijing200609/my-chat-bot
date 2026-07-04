@@ -30,7 +30,11 @@ def chat():
     try:
         data = request.json
         user_text = data.get("text", "")
-        user_image = data.get("image_base64", None)  # 微信/App 传过来的图片
+        user_image = data.get("image_base64", None)
+
+        # 🔧 修复：如果文字为空但有图片，自动补一个默认提示
+        if not user_text and user_image:
+            user_text = "请描述这张图片"
 
         # 构建消息内容（文字 + 图片）
         content = [{"type": "text", "text": user_text}]
@@ -40,7 +44,7 @@ def chat():
                 "image_url": {"url": f"data:image/jpeg;base64,{user_image}"}
             })
 
-        # 调用 AIHubMix（新版写法，支持多模态）
+        # 调用 AIHubMix（模型名称已修正为 claude-sonnet-4-6）
         response = client.chat.completions.create(
             model="claude-sonnet-4-6",
             messages=[{"role": "user", "content": content}],
