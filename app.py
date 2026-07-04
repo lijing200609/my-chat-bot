@@ -2,8 +2,12 @@ from flask import Flask, request, jsonify
 from openai import OpenAI
 import os
 import json
+import logging
 
 app = Flask(__name__)
+
+# 设置日志级别，打印请求详情
+logging.basicConfig(level=logging.INFO)
 
 # 新版 OpenAI 客户端（支持图片多模态）
 client = OpenAI(
@@ -28,10 +32,29 @@ def home():
 @app.route("/chat", methods=["POST"])
 def chat():
     try:
+        # 🔍 打印完整请求体，看看 ChatBox 到底发了什么
         data = request.json
+        app.logger.info(f"收到完整请求: {json.dumps(data, ensure_ascii=False)}")
 
-        # 🔧 关键修改：兼容多种字段名
-        user_text = data.get("text") or data.get("content") or data.get("message") or data.get("prompt") or ""
+        # 兼容多种字段名
+        user_text = (
+            data.get("text") or 
+            data.get("content") or 
+            data.get("message") or 
+            data.get("prompt") or 
+            data.get("input") or 
+            data.get("query") or 
+            data.get("question") or
+            data.get("messages")  # ChatBox 可能用这个字段
+        )
+
+        # 如果 messages 是数组，尝试提取最后一条用户消息
+        if not user_text and isinstance(data.get("messages"), list):
+            for msg in reversed(data["messages"]):
+                if msg.get("role") == "user":
+                    user_text = msg.get("content")
+                    break
+
         user_image = data.get("image_base64", None)
 
         # 如果文字为空但有图片，自动补一个默认提示
@@ -40,6 +63,7 @@ def chat():
 
         # 如果文字仍然为空，返回错误提示
         if not user_text:
+            app.logger.warning("未提取到用户文字内容")
             return jsonify({"response": "请提供文字内容或图片", "status": "error"}), 400
 
         # 构建消息内容（文字 + 图片）
@@ -68,6 +92,7 @@ def chat():
         return jsonify({"response": reply, "status": "success"})
 
     except Exception as e:
+        app.logger.error(f"发生错误: {str(e)}")
         return jsonify({"response": f"错误：{str(e)}", "status": "error"}), 500
 
 if __name__ == "__main__":
