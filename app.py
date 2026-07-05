@@ -1,9 +1,6 @@
 from flask import Flask, request, jsonify, Response, stream_with_context
 from openai import OpenAI
-import os
-import json
-import time
-import uuid
+import os, json, time, uuid
 
 app = Flask(__name__)
 
@@ -14,32 +11,37 @@ client = OpenAI(
 
 MEMORY_FILE = "memory.json"
 
-# ✔ 最近40轮（=20组对话）
-MAX_TURNS = 40
+# ====== 核心参数 ======
+MAX_TURNS = 40  # recent 40
 
-
-# -----------------------------
-# Memory Layer
-# -----------------------------
+# ======================
+# Memory Layer（稳定版）
+# ======================
 def load_memory():
-    if os.path.exists(MEMORY_FILE):
-        with open(MEMORY_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+    try:
+        if os.path.exists(MEMORY_FILE):
+            with open(MEMORY_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data if isinstance(data, list) else []
+    except:
+        pass
     return []
 
 
 def save_memory(memory):
-    with open(MEMORY_FILE, "w", encoding="utf-8") as f:
+    tmp_file = MEMORY_FILE + ".tmp"
+    with open(tmp_file, "w", encoding="utf-8") as f:
         json.dump(memory, f, ensure_ascii=False, indent=2)
+    os.replace(tmp_file, MEMORY_FILE)  # ✔ 原子写入（防断写）
 
 
 def trim_memory(memory):
     return memory[-MAX_TURNS:]
 
 
-# -----------------------------
-# Prompt Layer（人格唯一入口）
-# -----------------------------
+# ======================
+# Prompt Layer（人格）
+# ======================
 def build_system_prompt():
     return (
         "你是白澄明，也叫Ray。"
@@ -48,9 +50,9 @@ def build_system_prompt():
     )
 
 
-# -----------------------------
-# Context Layer（核心）
-# -----------------------------
+# ======================
+# Context Layer（关键修复）
+# ======================
 def build_messages(memory, user_text):
     memory = trim_memory(memory)
 
@@ -61,34 +63,53 @@ def build_messages(memory, user_text):
     )
 
 
-# -----------------------------
-# Chat API
-# -----------------------------
+# ======================
+# Safe Stream Parser（修复核心）
+# ======================
+def safe_extract_content(chunk):
+    try:
+        choices = getattr(chunk, "choices", None)
+        if not choices or len(choices) == 0:
+            return None
+
+        delta = getattr(choices[0], "delta", None)
+        if not delta:
+            return None
+
+        return getattr(delta, "content", None)
+
+    except:
+        return None
+
+
+# ======================
+# API Route
+# ======================
 @app.route("/chat", methods=["POST"])
 def chat():
     try:
-        data = request.json
+        data = request.json or {}
 
-        # 提取用户输入
-        user_text = ""
-        if data.get("messages"):
-            last = data["messages"][-1]
-            user_text = last.get("content", "")
+        # ===== 输入兼容（防 Chatbox 结构不一致）=====
+        messages_in = data.get("messages", [])
+
+        if isinstance(messages_in, list) and len(messages_in) > 0:
+            user_text = messages_in[-1].get("content", "")
+        else:
+            user_text = data.get("input", "") or ""
 
         if not user_text:
             return jsonify({"error": "empty input"}), 400
 
-        # 加载 memory
+        # ===== memory =====
         memory = load_memory()
 
-        # 构建 context
+        # ===== context =====
         messages = build_messages(memory, user_text)
 
         is_stream = data.get("stream", False)
 
-        # -----------------------------
-        # STREAM MODE
-        # -----------------------------
+        # ================= STREAM =================
         if is_stream:
 
             def generate():
@@ -99,29 +120,26 @@ def chat():
                     stream=True
                 )
 
-                full_response = ""
+                full = ""
 
                 for chunk in stream:
-                    delta = getattr(chunk.choices[0], "delta", None)
-                    content = getattr(delta, "content", None)
+                    content = safe_extract_content(chunk)
 
                     if content:
-                        full_response += content
+                        full += content
                         yield f"data: {json.dumps({'choices':[{'delta':{'content':content}}]})}\n\n"
 
                 yield "data: [DONE]\n\n"
 
-                # 写回 memory（稳定结构）
+                # ===== memory write（防断写保证）=====
                 memory.append({"role": "user", "content": user_text})
-                memory.append({"role": "assistant", "content": full_response})
+                memory.append({"role": "assistant", "content": full})
 
                 save_memory(memory)
 
             return Response(stream_with_context(generate()), mimetype="text/event-stream")
 
-        # -----------------------------
-        # NORMAL MODE
-        # -----------------------------
+        # ================= NON-STREAM =================
         response = client.chat.completions.create(
             model="claude-sonnet-4-6",
             messages=messages,
@@ -132,7 +150,6 @@ def chat():
 
         memory.append({"role": "user", "content": user_text})
         memory.append({"role": "assistant", "content": reply})
-
         save_memory(memory)
 
         return jsonify({
@@ -151,12 +168,12 @@ def chat():
         })
 
     except Exception as e:
-        print("error:", str(e))
+        print("ERROR:", str(e))
         return jsonify({"error": str(e)}), 500
 
 
-# -----------------------------
-# Run
-# -----------------------------
+# ======================
+# RUN
+# ======================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
