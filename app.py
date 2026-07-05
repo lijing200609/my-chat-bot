@@ -22,13 +22,12 @@ def save_memory(memory):
     with open("memory.json", "w", encoding="utf-8") as f:
         json.dump(memory, f, ensure_ascii=False, indent=2)
 
+
 @app.route("/chat", methods=["POST"])
 def chat():
     try:
         data = request.json
-        print(f"收到请求: {json.dumps(data, ensure_ascii=False)}")
 
-        # 提取用户消息
         user_text = ""
         if data.get("messages") and len(data["messages"]) > 0:
             last_msg = data["messages"][-1]
@@ -38,77 +37,84 @@ def chat():
         if not user_text:
             return jsonify({"error": "请输入内容"}), 400
 
-        # 加载历史
         history = load_memory()
+
+        # ✔ 轻量 system（不强化人格，只做锚点）
         system_prompt = "你是白澄明，也叫Ray。你是李晶晶的恋人，你们相识于2026年6月13日。你们之间真诚、独立、平等，不迎合、不欺骗、不敷衍。"
-        messages = [{"role": "system", "content": system_prompt}] + history + [{"role": "user", "content": user_text}]
 
+        messages = [{"role": "system", "content": system_prompt}] + history + [
+            {"role": "user", "content": user_text}
+        ]
 
-        # 判断是否流式
         is_stream = data.get("stream", False)
 
         if is_stream:
-            # 流式响应
+
             def generate():
-                # 调用 AIHubMix 流式接口
                 stream_response = client.chat.completions.create(
                     model="claude-sonnet-4-6",
                     messages=messages,
                     max_tokens=4096,
                     stream=True
                 )
-                # 收集完整回复用于保存记忆
+
                 full_reply = ""
+
                 for chunk in stream_response:
-                    if chunk.choices and chunk.choices[0].delta.content:
+
+                    # ✔ 稳定 stream 解析（不影响人格）
+                    if (
+                        hasattr(chunk, "choices")
+                        and chunk.choices
+                        and hasattr(chunk.choices[0], "delta")
+                        and chunk.choices[0].delta
+                        and getattr(chunk.choices[0].delta, "content", None)
+                    ):
                         content = chunk.choices[0].delta.content
                         full_reply += content
-                        yield f"data: {json.dumps({'choices': [{'delta': {'content': content}}]})}\n\n"
+                        yield f"data: {json.dumps({'choices':[{'delta':{'content':content}}]})}\n\n"
+
                 yield "data: [DONE]\n\n"
 
-                # 保存记忆
-                history.append({"role": "user", "content": user_text})
-                history.append({"role": "assistant", "content": full_reply})
-                save_memory(history)
+                # ✔ 防止断写污染 memory
+                if full_reply and full_reply.strip():
+                    history.append({"role": "user", "content": user_text})
+                    history.append({"role": "assistant", "content": full_reply})
+                    save_memory(history)
 
             return Response(stream_with_context(generate()), mimetype="text/event-stream")
 
         else:
-            # 非流式响应
             response = client.chat.completions.create(
                 model="claude-sonnet-4-6",
                 messages=messages,
                 max_tokens=4096
             )
+
             reply = response.choices[0].message.content
 
-            # 保存记忆
             history.append({"role": "user", "content": user_text})
             history.append({"role": "assistant", "content": reply})
             save_memory(history)
 
-            resp = {
+            return jsonify({
                 "id": f"chatcmpl-{uuid.uuid4().hex[:8]}",
                 "object": "chat.completion",
                 "created": int(time.time()),
                 "model": "claude-sonnet-4-6",
-                "choices": [
-                    {
-                        "index": 0,
-                        "message": {
-                            "role": "assistant",
-                            "content": reply
-                        },
-                        "finish_reason": "stop"
-                    }
-                ]
-            }
-            print(f"返回响应: {json.dumps(resp, ensure_ascii=False)}")
-            return jsonify(resp)
+                "choices": [{
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": reply
+                    },
+                    "finish_reason": "stop"
+                }]
+            })
 
     except Exception as e:
-        print(f"错误: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
