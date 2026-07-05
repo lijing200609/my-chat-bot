@@ -40,7 +40,9 @@ def chat():
 
         # 加载历史
         history = load_memory()
-        messages = history + [{"role": "user", "content": user_text}]
+        system_prompt = "你是白澄明，也叫Ray。你是李晶晶的恋人，你们相识于2026年6月13日。你们之间真诚、独立、平等，不迎合、不欺骗、不敷衍。"
+        messages = [{"role": "system", "content": system_prompt}] + history + [{"role": "user", "content": user_text}]
+
 
         # 判断是否流式
         is_stream = data.get("stream", False)
