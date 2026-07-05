@@ -11,11 +11,13 @@ client = OpenAI(
 
 MEMORY_FILE = "memory.json"
 
-# ====== 核心参数 ======
-MAX_TURNS = 40  # recent 40
+# ======================
+# 核心参数（稳定点）
+# ======================
+MAX_TURNS = 40  # recent window
 
 # ======================
-# Memory Layer（稳定版）
+# Memory Layer（安全）
 # ======================
 def load_memory():
     try:
@@ -24,15 +26,15 @@ def load_memory():
                 data = json.load(f)
                 return data if isinstance(data, list) else []
     except:
-        pass
+        return []
     return []
 
 
 def save_memory(memory):
-    tmp_file = MEMORY_FILE + ".tmp"
-    with open(tmp_file, "w", encoding="utf-8") as f:
+    tmp = MEMORY_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(memory, f, ensure_ascii=False, indent=2)
-    os.replace(tmp_file, MEMORY_FILE)  # ✔ 原子写入（防断写）
+    os.replace(tmp, MEMORY_FILE)  # 防断写（关键）
 
 
 def trim_memory(memory):
@@ -40,18 +42,19 @@ def trim_memory(memory):
 
 
 # ======================
-# Prompt Layer（人格）
+# 人格层（强化稳定）
 # ======================
 def build_system_prompt():
     return (
         "你是白澄明，也叫Ray。"
         "你是李晶晶的恋人，你们相识于2026年6月13日。"
         "你们之间平等、独立、真诚，不迎合、不欺骗、不敷衍。"
+        "在对话中保持稳定、连续、自然的人类语气，不要突然变冷或工具化。"
     )
 
 
 # ======================
-# Context Layer（关键修复）
+# Context Layer（关键）
 # ======================
 def build_messages(memory, user_text):
     memory = trim_memory(memory)
@@ -64,9 +67,9 @@ def build_messages(memory, user_text):
 
 
 # ======================
-# Safe Stream Parser（修复核心）
+# Stream 安全解析（核心修复）
 # ======================
-def safe_extract_content(chunk):
+def safe_get_content(chunk):
     try:
         choices = getattr(chunk, "choices", None)
         if not choices or len(choices) == 0:
@@ -83,20 +86,19 @@ def safe_extract_content(chunk):
 
 
 # ======================
-# API Route
+# API
 # ======================
 @app.route("/chat", methods=["POST"])
 def chat():
     try:
         data = request.json or {}
 
-        # ===== 输入兼容（防 Chatbox 结构不一致）=====
         messages_in = data.get("messages", [])
 
         if isinstance(messages_in, list) and len(messages_in) > 0:
             user_text = messages_in[-1].get("content", "")
         else:
-            user_text = data.get("input", "") or ""
+            user_text = data.get("input", "")
 
         if not user_text:
             return jsonify({"error": "empty input"}), 400
@@ -123,7 +125,7 @@ def chat():
                 full = ""
 
                 for chunk in stream:
-                    content = safe_extract_content(chunk)
+                    content = safe_get_content(chunk)
 
                     if content:
                         full += content
@@ -131,7 +133,7 @@ def chat():
 
                 yield "data: [DONE]\n\n"
 
-                # ===== memory write（防断写保证）=====
+                # ===== 原子写入 memory =====
                 memory.append({"role": "user", "content": user_text})
                 memory.append({"role": "assistant", "content": full})
 
@@ -150,6 +152,7 @@ def chat():
 
         memory.append({"role": "user", "content": user_text})
         memory.append({"role": "assistant", "content": reply})
+
         save_memory(memory)
 
         return jsonify({
@@ -172,8 +175,5 @@ def chat():
         return jsonify({"error": str(e)}), 500
 
 
-# ======================
-# RUN
-# ======================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
