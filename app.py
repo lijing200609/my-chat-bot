@@ -439,8 +439,7 @@ def pick_related_history(history, user_text):
 # =========================
 
 
-def build_messages(history, user_text):
-
+def build_messages(history, user_text, raw_content):
 
     recent_history = (
         history[-MAX_RECENT_MESSAGES:]
@@ -508,9 +507,7 @@ def build_messages(history, user_text):
         }
     )
 
-
     return messages
-
 
 
 # =========================
@@ -661,9 +658,10 @@ def chat():
         history = load_memory()
 
         messages = build_messages(
-            history,
-            user_text
-        )
+    history,
+    user_text,
+    raw_content
+)
 
 
         print(
