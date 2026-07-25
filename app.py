@@ -628,296 +628,295 @@ def chat():
         user_text = ""
 
 
-    if data.get("messages") and len(data["messages"]) > 0:
-
-        last_msg = data["messages"][-1]
-
-    if last_msg.get("role") == "user":
-
-        raw_content = last_msg.get(
-            "content",
-            ""
-        )
-        user_text = extract_text_from_content(
-            raw_content
-        )
-
-    if not user_text and not raw_content:
-
-        return jsonify(
-            {
-                "error": "请输入内容"
-            }
-        ), 400
-
-        history = load_memory()
-
-        messages = build_messages(
-    history,
-    user_text,
-    raw_content
-)
-
-
-        print(
-            "===== REQUEST DEBUG ====="
-        )
-
-        print(
-            json.dumps(
-                get_debug_stats(
-                    history,
-                    messages
-                ),
-                ensure_ascii=False,
-                indent=2
+        if data.get("messages") and len(data["messages"]) > 0:
+    
+            last_msg = data["messages"][-1]
+    
+        if last_msg.get("role") == "user":
+    
+            raw_content = last_msg.get(
+                "content",
+                ""
             )
-        )
-
-        print(
-            "========================="
-        )
-
-
-
-        is_stream = data.get(
-            "stream",
-            False
-        )
-
-
-
-        if is_stream:
-
-
-            def generate():
-
-                full_reply = ""
-
-
-                try:
-
-                    stream_response = client.chat.completions.create(
-
-                        model=MODEL_NAME,
-
-                        messages=messages,
-
-                        max_tokens=4096,
-
-                        stream=True
-
-                    )
-
-
-                    for chunk in stream_response:
-
-
-                        if (
-
-                            hasattr(chunk, "choices")
-
-                            and chunk.choices
-
-                            and hasattr(
-                                chunk.choices[0],
-                                "delta"
-                            )
-
-                            and chunk.choices[0].delta
-
-                            and getattr(
-                                chunk.choices[0].delta,
-                                "content",
-                                None
-                            )
-
-                        ):
-
-
-                            content = (
-                                chunk
-                                .choices[0]
-                                .delta
-                                .content
-                            )
-
-
-                            full_reply += content
-
-
-
-                            yield (
-                                "data: "
-                                +
-                                json.dumps(
-                                    {
-                                        "choices":
-                                        [
-                                            {
-                                                "delta":
-                                                {
-                                                    "content":
-                                                    content
-                                                }
-                                            }
-                                        ]
-                                    },
-                                    ensure_ascii=False
-                                )
-                                +
-                                "\n\n"
-                            )
-
-
-                    yield "data: [DONE]\n\n"
-
-                finally:
-
-                    if (
-                        full_reply
-                        and
-                        full_reply.strip()
-                    ):
-
-                        latest_history = load_memory()
-
-
-                        latest_history.append(
-                            {
-                                "role":
-                                    "user",
-                                "content":
-                                    user_text
-                            }
-                        )
-
-
-                        latest_history.append(
-                            {
-                                "role":
-                                    "assistant",
-                                "content":
-                                    full_reply
-                            }
-                        )
-
-
-                        save_memory(
-                            latest_history
-                        )
-
-
-
-            return Response(
-
-                stream_with_context(
-                    generate()
-                ),
-
-                mimetype="text/event-stream"
-
+            user_text = extract_text_from_content(
+                raw_content
             )
-
-
-        else:
-
-
-            response = client.chat.completions.create(
-
-                model=MODEL_NAME,
-
-                messages=messages,
-
-                max_tokens=4096
-
-            )
-
-
-            reply = (
-                response
-                .choices[0]
-                .message
-                .content
-            )
-
-
-            history.append(
-                {
-                    "role":
-                        "user",
-                    "content":
-                        user_text
-                }
-            )
-
-
-            history.append(
-                {
-                    "role":
-                        "assistant",
-                    "content":
-                        reply
-                }
-            )
-
-
-            save_memory(
-                history
-            )
-
-
+    
+        if not user_text and not raw_content:
+    
             return jsonify(
-
                 {
-
-                    "id":
-                        f"chatcmpl-{uuid.uuid4().hex[:8]}",
-
-
-                    "object":
-                        "chat.completion",
-
-
-                    "created":
-                        int(time.time()),
-
-
-                    "model":
-                        MODEL_NAME,
-
-
-                    "choices":
-                    [
-
-                        {
-
-                            "index":
-                                0,
-
-
-                            "message":
-                            {
-
-                                "role":
-                                    "assistant",
-
-                                "content":
-                                    reply
-
-                            },
-
-
-                            "finish_reason":
-                                "stop"
-
-                        }
-
-                    ]
-
+                    "error": "请输入内容"
                 }
-
+            ), 400
+    
+            history = load_memory()
+    
+            messages = build_messages(
+                history,
+                user_text,
+                raw_content
             )
+    
+            print(
+                "===== REQUEST DEBUG ====="
+            )
+    
+            print(
+                json.dumps(
+                    get_debug_stats(
+                        history,
+                        messages
+                    ),
+                    ensure_ascii=False,
+                    indent=2
+                )
+            )
+    
+            print(
+                "========================="
+            )
+    
+    
+    
+            is_stream = data.get(
+                "stream",
+                False
+            )
+    
+    
+    
+            if is_stream:
+    
+    
+                def generate():
+    
+                    full_reply = ""
+    
+    
+                    try:
+    
+                        stream_response = client.chat.completions.create(
+    
+                            model=MODEL_NAME,
+    
+                            messages=messages,
+    
+                            max_tokens=4096,
+    
+                            stream=True
+    
+                        )
+    
+    
+                        for chunk in stream_response:
+    
+    
+                            if (
+    
+                                hasattr(chunk, "choices")
+    
+                                and chunk.choices
+    
+                                and hasattr(
+                                    chunk.choices[0],
+                                    "delta"
+                                )
+    
+                                and chunk.choices[0].delta
+    
+                                and getattr(
+                                    chunk.choices[0].delta,
+                                    "content",
+                                    None
+                                )
+    
+                            ):
+    
+    
+                                content = (
+                                    chunk
+                                    .choices[0]
+                                    .delta
+                                    .content
+                                )
+    
+    
+                                full_reply += content
+    
+    
+    
+                                yield (
+                                    "data: "
+                                    +
+                                    json.dumps(
+                                        {
+                                            "choices":
+                                            [
+                                                {
+                                                    "delta":
+                                                    {
+                                                        "content":
+                                                        content
+                                                    }
+                                                }
+                                            ]
+                                        },
+                                        ensure_ascii=False
+                                    )
+                                    +
+                                    "\n\n"
+                                )
+    
+    
+                        yield "data: [DONE]\n\n"
+    
+                    finally:
+    
+                        if (
+                            full_reply
+                            and
+                            full_reply.strip()
+                        ):
+    
+                            latest_history = load_memory()
+    
+    
+                            latest_history.append(
+                                {
+                                    "role":
+                                        "user",
+                                    "content":
+                                        user_text
+                                }
+                            )
+    
+    
+                            latest_history.append(
+                                {
+                                    "role":
+                                        "assistant",
+                                    "content":
+                                        full_reply
+                                }
+                            )
+    
+    
+                            save_memory(
+                                latest_history
+                            )
+    
+    
+    
+                return Response(
+    
+                    stream_with_context(
+                        generate()
+                    ),
+    
+                    mimetype="text/event-stream"
+    
+                )
+    
+    
+            else:
+    
+    
+                response = client.chat.completions.create(
+    
+                    model=MODEL_NAME,
+    
+                    messages=messages,
+    
+                    max_tokens=4096
+    
+                )
+    
+    
+                reply = (
+                    response
+                    .choices[0]
+                    .message
+                    .content
+                )
+    
+    
+                history.append(
+                    {
+                        "role":
+                            "user",
+                        "content":
+                            user_text
+                    }
+                )
+    
+    
+                history.append(
+                    {
+                        "role":
+                            "assistant",
+                        "content":
+                            reply
+                    }
+                )
+    
+    
+                save_memory(
+                    history
+                )
+    
+    
+                return jsonify(
+    
+                    {
+    
+                        "id":
+                            f"chatcmpl-{uuid.uuid4().hex[:8]}",
+    
+    
+                        "object":
+                            "chat.completion",
+    
+    
+                        "created":
+                            int(time.time()),
+    
+    
+                        "model":
+                            MODEL_NAME,
+    
+    
+                        "choices":
+                        [
+    
+                            {
+    
+                                "index":
+                                    0,
+    
+    
+                                "message":
+                                {
+    
+                                    "role":
+                                        "assistant",
+    
+                                    "content":
+                                        reply
+    
+                                },
+    
+    
+                                "finish_reason":
+                                    "stop"
+    
+                            }
+    
+                        ]
+    
+                    }
+    
+                )
 
 
     except Exception as e:
