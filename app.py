@@ -627,7 +627,7 @@ def chat():
 
         user_text = ""
         raw_content = ""
-
+        is_stream = False
 
         if data.get("messages") and len(data["messages"]) > 0:
     
@@ -677,15 +677,10 @@ def chat():
             print(
                 "========================="
             )
+        
     
-    
-    
-            is_stream = data.get(
-                "stream",
-                False
-            )
-    
-    
+            is_stream = data.get("stream",False)
+      
     
         if is_stream:
 
