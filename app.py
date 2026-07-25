@@ -6,6 +6,7 @@ import time
 import uuid
 
 app = Flask(__name__)
+MEMORY_FILE = "/app/data/memory.json"
 
 client = OpenAI(
     api_key=os.getenv("AIHUBMIX_API_KEY"),
@@ -13,13 +14,13 @@ client = OpenAI(
 )
 
 def load_memory():
-    if os.path.exists("memory.json"):
-        with open("memory.json", "r", encoding="utf-8") as f:
+    if os.path.exists(MEMORY_FILE):
+    with open(MEMORY_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     return []
 
 def save_memory(memory):
-    with open("memory.json", "w", encoding="utf-8") as f:
+    with open(MEMORY_FILE, "w", encoding="utf-8") as f:
         json.dump(memory, f, ensure_ascii=False, indent=2)
 
 
