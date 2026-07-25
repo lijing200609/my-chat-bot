@@ -628,12 +628,9 @@ def chat():
         user_text = ""
 
 
-        if (
-    data.get("messages")
-    and len(data["messages"]) > 0
-):
+    if data.get("messages") and len(data["messages"]) > 0:
 
-    last_msg = data["messages"][-1]
+        last_msg = data["messages"][-1]
 
     if last_msg.get("role") == "user":
 
@@ -645,15 +642,13 @@ def chat():
             raw_content
         )
 
+    if not user_text and not raw_content:
 
-       if not user_text and not raw_content:
-
-    return jsonify(
-        {
-            "error": "请输入内容"
-        }
-    ), 400
-
+        return jsonify(
+            {
+                "error": "请输入内容"
+            }
+        ), 400
 
         history = load_memory()
 
