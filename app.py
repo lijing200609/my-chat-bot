@@ -628,6 +628,7 @@ def chat():
         user_text = ""
         raw_content = ""
         is_stream = False
+        messages = []
 
         if data.get("messages") and len(data["messages"]) > 0:
     
