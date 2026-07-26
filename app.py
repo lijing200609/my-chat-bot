@@ -38,7 +38,7 @@ MEMORY_FILE = os.getenv(
 # 记忆召回参数
 MAX_RECENT_MESSAGES = 150 
 MAX_RELATED_MESSAGES = 30
-MAX_RELATED_CHARS = 15000
+MAX_RELATED_CHARS = 20000
 
 
 DEBUG_KEY = os.getenv(
@@ -499,11 +499,20 @@ def build_messages(history, user_text, raw_content):
         )
 
 
-
+    # 如果本次消息里有图片，就把 ChatBox 原始 content 发给模型；
+    # 如果只是纯文字，就继续发 user_text，避免影响普通文字聊天。
+    content_for_model = user_text
+    
+    if isinstance(raw_content, list):
+        for item in raw_content:
+            if isinstance(item, dict) and item.get("type") == "image_url":
+                content_for_model = raw_content
+                break
+    
     messages.append(
         {
             "role": "user",
-            "content": user_text
+            "content": content_for_model
         }
     )
 
