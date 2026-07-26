@@ -503,7 +503,7 @@ def build_messages(history, user_text, raw_content):
     messages.append(
         {
             "role": "user",
-            "content": raw_content
+            "content": user_text
         }
     )
 
