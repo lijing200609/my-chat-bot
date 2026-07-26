@@ -37,8 +37,8 @@ MEMORY_FILE = os.getenv(
 
 # 记忆召回参数
 MAX_RECENT_MESSAGES = 150 
-MAX_RELATED_MESSAGES = 30
-MAX_RELATED_CHARS = 15000
+MAX_RELATED_MESSAGES = 50
+MAX_RELATED_CHARS = 20000
 
 
 DEBUG_KEY = os.getenv(
@@ -178,29 +178,7 @@ def save_memory(memory):
         if os.path.exists(temp_path):
             os.remove(temp_path)
 
-def extract_text_from_content(content):
-    """
-    从 Chatbox 多模态消息中提取文字。
-    图片不会参与关键词检索，只用于发送给模型。
-    """
 
-    if isinstance(content, str):
-        return content
-
-    if isinstance(content, list):
-        texts = []
-
-        for item in content:
-            if isinstance(item, dict):
-
-                if item.get("type") == "text":
-                    texts.append(
-                        item.get("text", "")
-                    )
-
-        return "\n".join(texts)
-
-    return ""
 
 # =========================
 # 记忆检索
@@ -439,7 +417,8 @@ def pick_related_history(history, user_text):
 # =========================
 
 
-def build_messages(history, user_text, raw_content):
+def build_messages(history, user_text):
+
 
     recent_history = (
         history[-MAX_RECENT_MESSAGES:]
@@ -507,7 +486,9 @@ def build_messages(history, user_text, raw_content):
         }
     )
 
+
     return messages
+
 
 
 # =========================
@@ -623,66 +604,75 @@ def chat():
     try:
 
         data = request.json or {}
-        print("DEBUG DATA:", data)
+
 
         user_text = ""
-        raw_content = ""
-        is_stream = False
-        messages = []
 
-        if data.get("messages") and len(data["messages"]) > 0:
-    
+
+        if (
+            data.get("messages")
+            and len(data["messages"]) > 0
+        ):
+
             last_msg = data["messages"][-1]
-    
-        if last_msg.get("role") == "user":
-    
-            raw_content = last_msg.get(
-                "content",
-                ""
-            )
-            user_text = extract_text_from_content(
-                raw_content
-            )
-    
-        if not user_text and not raw_content:
-    
+
+
+            if last_msg.get("role") == "user":
+
+                user_text = last_msg.get(
+                    "content",
+                    ""
+                )
+
+
+        if not user_text:
+
             return jsonify(
                 {
-                    "error": "请输入内容"
+                    "error":
+                        "请输入内容"
                 }
             ), 400
-    
-            history = load_memory()
-    
-            messages = build_messages(
-                history,
-                user_text,
-                raw_content
+
+
+
+        history = load_memory()
+
+
+        messages = build_messages(
+            history,
+            user_text
+        )
+
+
+        print(
+            "===== REQUEST DEBUG ====="
+        )
+
+        print(
+            json.dumps(
+                get_debug_stats(
+                    history,
+                    messages
+                ),
+                ensure_ascii=False,
+                indent=2
             )
-    
-            print(
-                "===== REQUEST DEBUG ====="
-            )
-    
-            print(
-                json.dumps(
-                    get_debug_stats(
-                        history,
-                        messages
-                    ),
-                    ensure_ascii=False,
-                    indent=2
-                )
-            )
-    
-            print(
-                "========================="
-            )
-        
-    
-            is_stream = data.get("stream",False)
-      
-    
+        )
+
+        print(
+            "========================="
+        )
+
+
+
+        is_stream = data.get(
+            "stream",
+            False
+        )
+
+
+
         if is_stream:
 
 
@@ -766,9 +756,13 @@ def chat():
                             )
 
 
+
                     yield "data: [DONE]\n\n"
 
+
+
                 finally:
+
 
                     if (
                         full_reply
@@ -816,6 +810,7 @@ def chat():
             )
 
 
+
         else:
 
 
@@ -861,6 +856,7 @@ def chat():
             save_memory(
                 history
             )
+
 
 
             return jsonify(
@@ -917,8 +913,6 @@ def chat():
 
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
 
         return jsonify(
             {
@@ -953,6 +947,7 @@ def debug_memory():
 
 
     history = load_memory()
+
 
 
     return jsonify(
@@ -1012,6 +1007,7 @@ def download_memory():
     ) as f:
 
         content = f.read()
+
 
 
     return Response(
