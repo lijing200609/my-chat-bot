@@ -623,7 +623,7 @@ def chat():
     try:
 
         data = request.json or {}
-
+        print("DEBUG DATA:", data)
 
         user_text = ""
         raw_content = ""
