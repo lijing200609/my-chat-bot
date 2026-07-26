@@ -652,23 +652,21 @@ def chat():
                 }
             ), 400
     
-            history = load_memory()
+        history = load_memory()
     
-            messages = build_messages(
-                history,
-                user_text,
-                raw_content
-            )
-            print("DEBUG OUTGOING messages_type:", type(messages).__name__, flush=True)
-            print("DEBUG OUTGOING messages_len:", 
-                  len(messages) if isinstance(messages, list) else "not_list", 
-                  flush=True)
+        messages = build_messages(
+            history,
+            user_text,
+            raw_content
+        )
+        print("DEBUG OUTGOING messages_type:", type(messages).__name__, flush=True)
+        print("DEBUG OUTGOING messages_len:", len(messages) if isinstance(messages, list) else "not_list", flush=True)
 
-            if isinstance(messages, list) and messages:
-                print("DEBUG OUTGOING first_role:", messages[0].get("role"), flush=True)
-                print("DEBUG OUTGOING last_role:", messages[-1].get("role"), flush=True)
-                print("DEBUG OUTGOING last_content_type:", type(messages[-1].get("content")).__name__, flush=True)
-                print("DEBUG OUTGOING last_content_preview:", str(messages[-1].get("content"))[:300], flush=True)
+        if isinstance(messages, list) and messages:
+            print("DEBUG OUTGOING first_role:", messages[0].get("role"), flush=True)
+            print("DEBUG OUTGOING last_role:", messages[-1].get("role"), flush=True)
+            print("DEBUG OUTGOING last_content_type:", type(messages[-1].get("content")).__name__, flush=True)
+            print("DEBUG OUTGOING last_content_preview:", str(messages[-1].get("content"))[:300], flush=True)
             
     
             print(
