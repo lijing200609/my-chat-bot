@@ -623,6 +623,7 @@ def chat():
     try:
 
         data = request.json or {}
+        print("CODE_VERSION_0726_1519_REACHED_CHAT", flush=True)
 
         user_text = ""
         raw_content = ""
@@ -669,9 +670,6 @@ def chat():
                 print("DEBUG OUTGOING last_content_type:", type(messages[-1].get("content")).__name__, flush=True)
                 print("DEBUG OUTGOING last_content_preview:", str(messages[-1].get("content"))[:300], flush=True)
             
-            print(
-                "===== REQUEST DEBUG ====="
-            )
     
             print(
                 json.dumps(
